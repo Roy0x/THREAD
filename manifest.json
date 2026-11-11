@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "THREAD — Task Memory",
+  "version": "0.1.0",
+  "description": "Pause browser tasks, save a checkpoint, and resume the tabs that matter.",
+  "permissions": ["storage", "tabs", "sidePanel"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "action": { "default_title": "Open THREAD" }
+}
