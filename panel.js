@@ -1,12 +1,14 @@
 import { readState, writeState, createTask, dedupeTabs, updateTask, activateTask } from './store.js';
 import { resumeUrls } from './resume.js';
 import { getSuggestions } from './suggestions.js';
+import { clusterActivity, countOpenTaskTabs } from './continuity.js';
 
 const $ = id => document.getElementById(id);
 let state = await readState();
 let busy = false;
 let history = [];
 let dismissed = [];
+let openTabs = [];
 let settings = { tracking: false, excludedDomains: [] };
 const validUrl = url => /^https?:\/\//i.test(url || '');
 
@@ -78,6 +80,25 @@ function renderSuggestions() {
     $('suggestionsList').append(card);
   }
 }
+function renderTimeline() {
+  const groups = settings.tracking ? clusterActivity(history) : [];
+  $('timeline').replaceChildren();
+  $('timelineCount').textContent = groups.length ? groups.length + ' clusters' : '';
+  if (!groups.length) {
+    $('timeline').append(el('div', 'history-empty', settings.tracking ? 'No activity clusters yet.' : 'Enable recovery to show local activity.'));
+    return;
+  }
+  for (const group of groups) {
+    const card = el('div', 'timeline-entry');
+    card.append(el('div', 'timeline-date', new Date(group.latest).toLocaleString()));
+    card.append(el('div', 'timeline-detail', `${group.snapshots} snapshots · ${group.uniqueUrls} unique URLs · ${group.tabs[0]?.title || 'Browser activity'}`));
+    $('timeline').append(card);
+  }
+}
+async function refreshPresence() {
+  try { openTabs = (await chrome.tabs.query({})).filter(t => !t.incognito); render(); }
+  catch { openTabs = []; }
+}
 function renderHistory() {
   $('history').replaceChildren();
   if (!history.length) $('history').append(el('div', 'history-empty', 'No recent sessions recorded yet.'));
@@ -110,10 +131,12 @@ function render() {
   $('count').textContent = `${state.tasks.length} saved`;
   $('empty').hidden = state.tasks.length > 0;
   for (const task of state.tasks) {
-    const card = el('article', `task ${state.activeId === task.id ? 'active' : ''}`);
+    const card = el('article', `task ${state.activeId === task.id ? 'active' : ''} ${task.status === 'completed' ? 'completed' : ''}`);
     const top = el('div', 'task-top');
-    top.append(el('div', 'task-name', task.name), el('span', `badge ${task.status === 'paused' ? 'paused' : ''}`, task.status === 'paused' ? 'Paused' : 'Active'));
+    top.append(el('div', 'task-name', task.name), el('span', `badge ${task.status === 'completed' ? 'completed' : task.status === 'paused' ? 'paused' : ''}`, task.status === 'completed' ? 'Completed' : task.status === 'paused' ? 'Paused' : 'Active'));
     card.append(top, el('div', 'meta', `${task.tabs.length} tabs · Updated ${new Date(task.updatedAt).toLocaleString()}`));
+    const opened = countOpenTaskTabs(task, openTabs);
+    if (opened) card.append(el('div', 'presence', `${opened} of ${task.tabs.length} saved tabs already open`));
     card.append(el('div', 'field-title', 'NEXT STEP / CHECKPOINT'));
     const note = el('textarea');
     note.placeholder = 'What were you doing? What comes next?';
@@ -147,12 +170,12 @@ function render() {
         const result = await resumeUrls(task.tabs);
         state = activateTask(state, task.id);
         await writeState(state);
-        render(); flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
+        render(); renderSuggestions(); await refreshPresence(); flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
       } catch (e) { flash(`Error: ${e.message}`); }
       finally { busy = false; }
     });
     const pause = el('button', 'secondary', 'Pause');
-    pause.disabled = task.status === 'paused';
+    pause.disabled = task.status !== 'active';
     pause.addEventListener('click', async () => {
       await mutate(s => ({ ...updateTask(s, task.id, { status: 'paused', note: note.value.trim() }), activeId: s.activeId === task.id ? null : s.activeId }));
       flash('Task paused');
@@ -164,7 +187,20 @@ function render() {
       if (!confirm(`Delete saved workspace “${task.name}”? This will not close browser tabs.`)) return;
       await mutate(s => ({ tasks: s.tasks.filter(t => t.id !== task.id), activeId: s.activeId === task.id ? null : s.activeId }));
     });
-    actions.append(save, capture, resume, pause, remove);
+    const complete = el('button', 'secondary', task.status === 'completed' ? 'Reopen task' : 'Mark done');
+    complete.addEventListener('click', async () => {
+      if (task.status === 'completed') {
+        await mutate(s => updateTask(s, task.id, { status: 'paused' }));
+        flash('Task reopened as paused');
+      } else {
+        await mutate(s => ({
+          ...updateTask(s, task.id, { status: 'completed', completedAt: new Date().toISOString(), note: note.value.trim() }),
+          activeId: s.activeId === task.id ? null : s.activeId
+        }));
+        flash('Task marked completed');
+      }
+    });
+    actions.append(save, capture, resume, pause, complete, remove);
     card.append(actions);
     $('tasks').append(card);
   }
@@ -185,10 +221,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.threadHistoryV2) {
     history = changes.threadHistoryV2.newValue || [];
     renderHistory();
+    renderTimeline();
     renderSuggestions();
   }
   if (area === 'local' && changes.threadSettingsV2) {
     settings = changes.threadSettingsV2.newValue || settings;
+    renderTimeline();
     renderSuggestions();
   }
   if (area === 'local' && changes.threadDismissedV3) {
@@ -209,7 +247,7 @@ $('trackingEnabled').addEventListener('change', async () => {
     const focused = windows.find(w => w.focused) || windows[0];
     if (focused) await chrome.runtime.sendMessage({ type: 'CAPTURE_WINDOW', windowId: focused.id });
   }
-  renderSuggestions();
+  renderTimeline(); renderSuggestions();
   flash(settings.tracking ? 'Recent work tracking enabled' : 'Tracking disabled');
 });
 $('savePrivacy').addEventListener('click', async () => {
@@ -220,13 +258,13 @@ $('savePrivacy').addEventListener('click', async () => {
   await chrome.storage.local.set({ threadSettingsV2: settings });
   history = [];
   await chrome.storage.local.set({ threadHistoryV2: [] });
-  renderHistory(); renderSuggestions(); flash('Exclusions saved and prior history cleared');
+  renderHistory(); renderTimeline(); renderSuggestions(); flash('Exclusions saved and prior history cleared');
 });
 $('clearHistory').addEventListener('click', async () => {
   if (!confirm('Delete all recent-session history? Saved workspaces will remain.')) return;
   history = [];
   await chrome.storage.local.set({ threadHistoryV2: [] });
-  renderHistory(); renderSuggestions(); flash('Recent history cleared');
+  renderHistory(); renderTimeline(); renderSuggestions(); flash('Recent history cleared');
 });
 const extras = await chrome.storage.local.get(['threadHistoryV2', 'threadSettingsV2', 'threadDismissedV3']);
 history = extras.threadHistoryV2 || [];
@@ -235,5 +273,10 @@ settings = extras.threadSettingsV2 || settings;
 $('trackingEnabled').checked = settings.tracking;
 $('excluded').value = settings.excludedDomains.join('\n');
 renderHistory();
+renderTimeline();
 render();
 renderSuggestions();
+refreshPresence();
+chrome.tabs.onCreated.addListener(() => { refreshPresence(); });
+chrome.tabs.onRemoved.addListener(() => { refreshPresence(); });
+chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshPresence(); });

@@ -1,4 +1,4 @@
-# THREAD — Chrome task-memory extension (v0.3)
+# THREAD — Chrome task-memory extension (v0.4)
 
 Local-first Manifest V3 Chrome extension. No backend, subscription, account, or AI key.
 
@@ -30,3 +30,13 @@ Paused named workspaces can be suggested even when activity tracking is off. Uns
 Check manual save → checkpoint → pause → resume and verify no duplicate tab creation. Enable tracking, switch tabs, then return after at least 15 minutes and inspect the suggestion list. Dismiss a suggestion and ensure it stays hidden. Reload and confirm workspaces and dismissal persistence.
 
 **Limitations:** Heuristics are not real task detection. No form/input restoration, browser session history, cross-device sync, or AI response completion detection. Local storage is accessible to the browser profile; do not save confidential notes. Multi-panel writes are last-writer-wins.
+
+## v0.4 task continuity
+
+- Mark tasks done, or reopen completed tasks. Completed work is excluded from the paused-work suggestion list; saved tab URLs remain intact.
+- Display whether the task's saved URLs are already open in Chrome (exact URL matching).
+- Add an opt-in Activity timeline that clusters snapshots using significant exact URL overlap. Clustering does not prove which task the user intended.
+- Disabling tracking hides timeline entries and unsaved-session suggestions. Clearing recent history removes timeline data.
+- Updates retain the original `threadStateV1` workspaces, `threadHistoryV2` snapshots and tracking settings.
+
+Test cases: task complete → hidden from paused suggestions → reopen → paused; browser tab presence changes; snapshot clustering; excluded domains; recent history deletion.

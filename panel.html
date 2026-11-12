@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="panel.css" />
   <link rel="stylesheet" href="tracking.css" />
   <link rel="stylesheet" href="suggestions.css" />
+  <link rel="stylesheet" href="continuity.css" />
 </head>
 <body>
   <header class="header">
@@ -30,6 +31,8 @@
       <div class="privacy"><label for="excluded">EXCLUDED DOMAINS (ONE PER LINE)</label><textarea id="excluded" rows="2" placeholder="bank.example.com"></textarea><button id="savePrivacy" class="minor">Save exclusions</button></div>
       <div class="section-head"><h2>Recent sessions</h2><button id="clearHistory" class="text-button">Clear history</button></div>
       <div id="history" class="history"></div>
+      <div class="section-head"><h2>Activity timeline</h2><span id="timelineCount" class="meta"></span></div>
+      <div id="timeline" class="history"></div>
       <p class="hint">Tracking is off until enabled. Saves URLs and titles only, up to 30 snapshots. No page content or incognito tabs.</p>
     </section>
     <div class="section-head"><h2>Workspaces</h2><span id="count">0 saved</span></div>
