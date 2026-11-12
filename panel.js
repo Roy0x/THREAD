@@ -1,10 +1,12 @@
 import { readState, writeState, createTask, dedupeTabs, updateTask, activateTask } from './store.js';
 import { resumeUrls } from './resume.js';
+import { getSuggestions } from './suggestions.js';
 
 const $ = id => document.getElementById(id);
 let state = await readState();
 let busy = false;
 let history = [];
+let dismissed = [];
 let settings = { tracking: false, excludedDomains: [] };
 const validUrl = url => /^https?:\/\//i.test(url || '');
 
@@ -15,7 +17,7 @@ function flash(message) {
 async function mutate(fn) {
   if (busy) return;
   busy = true;
-  try { state = fn(state); await writeState(state); render(); }
+  try { state = fn(state); await writeState(state); render(); renderSuggestions(); }
   catch (error) { flash(`Error: ${error.message}`); }
   finally { busy = false; }
 }
@@ -31,6 +33,50 @@ function el(tag, className, content) {
   if (className) node.className = className;
   if (content !== undefined) node.textContent = content;
   return node;
+}
+async function dismissSuggestion(suggestion) {
+  const key = suggestion.type === 'session' ? 'urls:' + suggestion.signature : suggestion.id;
+  dismissed = [...new Set([...dismissed, key])].slice(-100);
+  await chrome.storage.local.set({ threadDismissedV3: dismissed });
+  renderSuggestions();
+}
+function renderSuggestions() {
+  const suggestions = getSuggestions(state, settings.tracking ? history : [], dismissed);
+  $('suggestionsSection').hidden = suggestions.length === 0;
+  $('suggestionCount').textContent = suggestions.length + ' suggestions';
+  $('suggestionsList').replaceChildren();
+  for (const suggestion of suggestions) {
+    const card = el('article', 'suggestion');
+    card.append(el('div', 'suggestion-name', suggestion.title));
+    card.append(el('div', 'suggestion-detail', suggestion.note));
+    const actions = el('div', 'suggestion-actions');
+    const resume = el('button', '', suggestion.type === 'task' ? 'Resume task' : 'Recover tabs');
+    resume.addEventListener('click', async () => {
+      try {
+        const result = await resumeUrls(suggestion.tabs);
+        if (suggestion.type === 'task') await mutate(s => activateTask(s, suggestion.taskId));
+        await dismissSuggestion(suggestion);
+        flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
+      } catch (e) { flash(`Error: ${e.message}`); }
+    });
+    actions.append(resume);
+    if (suggestion.type === 'session') {
+      const save = el('button', '', 'Save as task');
+      save.addEventListener('click', async () => {
+        const name = prompt('Workspace name:', suggestion.title);
+        if (!name?.trim()) return;
+        await mutate(s => createTask(s, name, suggestion.tabs));
+        await dismissSuggestion(suggestion);
+        flash('Workspace saved');
+      });
+      actions.append(save);
+    }
+    const dismiss = el('button', 'dismiss', 'Dismiss');
+    dismiss.addEventListener('click', () => dismissSuggestion(suggestion).catch(e => flash(e.message)));
+    actions.append(dismiss);
+    card.append(actions);
+    $('suggestionsList').append(card);
+  }
 }
 function renderHistory() {
   $('history').replaceChildren();
@@ -139,10 +185,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.threadHistoryV2) {
     history = changes.threadHistoryV2.newValue || [];
     renderHistory();
+    renderSuggestions();
+  }
+  if (area === 'local' && changes.threadSettingsV2) {
+    settings = changes.threadSettingsV2.newValue || settings;
+    renderSuggestions();
+  }
+  if (area === 'local' && changes.threadDismissedV3) {
+    dismissed = changes.threadDismissedV3.newValue || [];
+    renderSuggestions();
   }
   if (area === 'local' && changes.threadStateV1 && !busy) {
     state = changes.threadStateV1.newValue || { tasks: [], activeId: null };
     render();
+    renderSuggestions();
   }
 });
 $('trackingEnabled').addEventListener('change', async () => {
@@ -153,6 +209,7 @@ $('trackingEnabled').addEventListener('change', async () => {
     const focused = windows.find(w => w.focused) || windows[0];
     if (focused) await chrome.runtime.sendMessage({ type: 'CAPTURE_WINDOW', windowId: focused.id });
   }
+  renderSuggestions();
   flash(settings.tracking ? 'Recent work tracking enabled' : 'Tracking disabled');
 });
 $('savePrivacy').addEventListener('click', async () => {
@@ -163,18 +220,20 @@ $('savePrivacy').addEventListener('click', async () => {
   await chrome.storage.local.set({ threadSettingsV2: settings });
   history = [];
   await chrome.storage.local.set({ threadHistoryV2: [] });
-  renderHistory(); flash('Exclusions saved and prior history cleared');
+  renderHistory(); renderSuggestions(); flash('Exclusions saved and prior history cleared');
 });
 $('clearHistory').addEventListener('click', async () => {
   if (!confirm('Delete all recent-session history? Saved workspaces will remain.')) return;
   history = [];
   await chrome.storage.local.set({ threadHistoryV2: [] });
-  renderHistory(); flash('Recent history cleared');
+  renderHistory(); renderSuggestions(); flash('Recent history cleared');
 });
-const extras = await chrome.storage.local.get(['threadHistoryV2', 'threadSettingsV2']);
+const extras = await chrome.storage.local.get(['threadHistoryV2', 'threadSettingsV2', 'threadDismissedV3']);
 history = extras.threadHistoryV2 || [];
+dismissed = extras.threadDismissedV3 || [];
 settings = extras.threadSettingsV2 || settings;
 $('trackingEnabled').checked = settings.tracking;
 $('excluded').value = settings.excludedDomains.join('\n');
 renderHistory();
 render();
+renderSuggestions();

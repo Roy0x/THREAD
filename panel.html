@@ -6,6 +6,7 @@
   <title>THREAD</title>
   <link rel="stylesheet" href="panel.css" />
   <link rel="stylesheet" href="tracking.css" />
+  <link rel="stylesheet" href="suggestions.css" />
 </head>
 <body>
   <header class="header">
@@ -18,6 +19,11 @@
       <input id="taskName" maxlength="80" placeholder="e.g. Fix authentication bug" autocomplete="off" />
       <button id="create">+ Save current window as task</button>
       <p class="hint">Captures the titles and URLs of normal web tabs in this window.</p>
+    </section>
+    <section class="suggestions" id="suggestionsSection" hidden>
+      <div class="section-head"><h2>Pick up where you left off</h2><span id="suggestionCount" class="meta"></span></div>
+      <div id="suggestionsList"></div>
+      <p class="hint">Suggestions are based on saved pauses and older browser sessions, not AI analysis. Dismiss anything irrelevant.</p>
     </section>
     <section class="tracking">
       <div class="tracking-top"><div><strong>Recent work recovery</strong><p>Optionally remember recently used web tabs.</p></div><label class="switch"><input id="trackingEnabled" type="checkbox" /><span>On</span></label></div>

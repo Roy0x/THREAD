@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "THREAD — Task Memory",
-  "version": "0.2.0",
-  "description": "Recover recent browser work, save checkpoints, and resume without duplicate tabs.",
+  "version": "0.3.0",
+  "description": "Task checkpoints, opt-in work recovery, and local resume suggestions.",
   "permissions": [
     "storage",
     "tabs",
