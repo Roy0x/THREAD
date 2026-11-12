@@ -14,6 +14,7 @@ export function createTask(state, name, tabs, note = '') {
     id: crypto.randomUUID(), name: name.trim(), note: note.trim(),
     status: 'active', createdAt: now, updatedAt: now,
     preferredUrl: tabs.find(t => t.active && /^https?:\/\//i.test(t.url || ''))?.url || tabs[0]?.url || null,
+    preferredTabId: tabs.find(t => t.active)?.id ?? null,
     tabs: dedupeTabs(tabs)
   };
   return { tasks: [task, ...state.tasks.map(t => t.id === state.activeId ? { ...t, status: 'paused' } : t)], activeId: task.id };
@@ -21,10 +22,18 @@ export function createTask(state, name, tabs, note = '') {
 export function dedupeTabs(tabs) {
   const seen = new Set();
   return tabs.filter(t => {
-    if (!/^https?:\/\//i.test(t.url || '') || seen.has(t.url)) return false;
-    seen.add(t.url);
+    if (!/^https?:\/\//i.test(t.url || '')) return false;
+    // Different Chrome tabs can have the exact same URL and still hold different user work.
+    const key = Number.isInteger(t.id) ? 'tab:' + t.id : 'url:' + t.url;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
-  }).map(t => ({ url: t.url, title: t.title || t.url, ...(t.active ? { active: true } : {}) }));
+  }).map(t => ({
+    url: t.url, title: t.title || t.url,
+    ...(Number.isInteger(t.id) ? { id: t.id } : {}),
+    ...(Number.isInteger(t.windowId) ? { windowId: t.windowId } : {}),
+    ...(t.active ? { active: true } : {})
+  }));
 }
 export function updateTask(state, id, changes) {
   const tasks = state.tasks.map(t => t.id === id ? { ...t, ...changes, updatedAt: new Date().toISOString() } : t);

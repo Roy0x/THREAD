@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "THREAD — Task Memory",
-  "version": "0.4.1",
-  "description": "Local-first task continuity: completed workspaces, recent activity clusters, and return hints.",
+  "version": "0.4.2",
+  "description": "Focus the original saved Chrome tab and window when resuming tasks.",
   "permissions": [
     "storage",
     "tabs",

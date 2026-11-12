@@ -1,4 +1,4 @@
-# THREAD — Chrome task-memory extension (v0.4.1)
+# THREAD — Chrome task-memory extension (v0.4.2)
 
 Local-first Manifest V3 Chrome extension. No backend, subscription, account, or AI key.
 
@@ -49,3 +49,10 @@ Click a saved tab's title to activate **that specific tab** in Chrome (or open o
 When a workspace is captured or updated, the active tab is marked and becomes its preferred URL. Legacy workspaces still work; click the tab you want once to assign the correct focus. No saved workspaces are removed, and there are no new Chrome permissions.
 
 Checks: tab click focuses correct existing tab; absent URL opens only selected tab; Resume focuses preferred tab even when another saved tab is first; no duplicate URLs created.
+
+
+## v0.4.2: original-tab focus
+
+Chrome tabs now retain their `id` and `windowId` when captured or updated. Resume focuses the exact original tab, even if multiple tabs share a URL. Missing tabs reopen within the existing task window if possible; no new window is created. Tab identities are only valid while those tabs exist. When a tab has been closed or Chrome recreated it, THREAD falls back to a matching URL and window rather than recreating its previous in-page state.
+
+**Test:** Open two tabs with the same URL, save a workspace with the *second* active, click Resume, and verify the second tab and its original window are focused. Test again after closing the second tab to verify graceful fallback.
