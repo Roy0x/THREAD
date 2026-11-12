@@ -13,6 +13,7 @@ export function createTask(state, name, tabs, note = '') {
   const task = {
     id: crypto.randomUUID(), name: name.trim(), note: note.trim(),
     status: 'active', createdAt: now, updatedAt: now,
+    preferredUrl: tabs.find(t => t.active && /^https?:\/\//i.test(t.url || ''))?.url || tabs[0]?.url || null,
     tabs: dedupeTabs(tabs)
   };
   return { tasks: [task, ...state.tasks.map(t => t.id === state.activeId ? { ...t, status: 'paused' } : t)], activeId: task.id };
@@ -23,7 +24,7 @@ export function dedupeTabs(tabs) {
     if (!/^https?:\/\//i.test(t.url || '') || seen.has(t.url)) return false;
     seen.add(t.url);
     return true;
-  }).map(t => ({ url: t.url, title: t.title || t.url }));
+  }).map(t => ({ url: t.url, title: t.title || t.url, ...(t.active ? { active: true } : {}) }));
 }
 export function updateTask(state, id, changes) {
   const tasks = state.tasks.map(t => t.id === id ? { ...t, ...changes, updatedAt: new Date().toISOString() } : t);

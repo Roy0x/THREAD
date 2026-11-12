@@ -1,5 +1,5 @@
 import { readState, writeState, createTask, dedupeTabs, updateTask, activateTask } from './store.js';
-import { resumeUrls } from './resume.js';
+import { resumeUrls, focusSavedUrl } from './resume.js';
 import { getSuggestions } from './suggestions.js';
 import { clusterActivity, countOpenTaskTabs } from './continuity.js';
 
@@ -55,7 +55,7 @@ function renderSuggestions() {
     const resume = el('button', '', suggestion.type === 'task' ? 'Resume task' : 'Recover tabs');
     resume.addEventListener('click', async () => {
       try {
-        const result = await resumeUrls(suggestion.tabs);
+        const result = await resumeUrls(suggestion.tabs, chrome, suggestion.type === 'task' ? state.tasks.find(t => t.id === suggestion.taskId)?.preferredUrl : null);
         if (suggestion.type === 'task') await mutate(s => activateTask(s, suggestion.taskId));
         await dismissSuggestion(suggestion);
         flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
@@ -145,8 +145,20 @@ function render() {
     card.append(note);
     const list = el('ul', 'tab-list');
     for (const t of task.tabs) {
-      const item = el('li', '', t.title);
-      item.title = t.url;
+      const item = el('li', '');
+      const link = el('button', 'saved-tab-link', (t.url === task.preferredUrl ? '★ ' : '↗ ') + t.title);
+      link.type = 'button';
+      link.title = 'Open this exact saved tab: ' + t.url;
+      link.setAttribute('aria-label', 'Open saved tab ' + t.title);
+      link.addEventListener('click', async () => {
+        try {
+          const result = await focusSavedUrl(t.url);
+          await mutate(s => updateTask(s, task.id, { preferredUrl: t.url }));
+          await refreshPresence();
+          flash(`Opened selected tab · reused ${result.existing}, new ${result.opened}`);
+        } catch (e) { flash(`Error: ${e.message}`); }
+      });
+      item.append(link);
       list.append(item);
     }
     card.append(list);
@@ -158,7 +170,7 @@ function render() {
       try {
         const tabs = await currentTabs();
         if (!tabs.length) return flash('No normal web tabs found');
-        await mutate(s => updateTask(s, task.id, { tabs })); flash('Tabs updated');
+        await mutate(s => updateTask(s, task.id, { tabs, preferredUrl: tabs.find(t => t.active)?.url || tabs[0]?.url || null })); flash('Tabs updated');
       } catch (e) { flash(`Error: ${e.message}`); }
     });
     const resume = el('button', '', '↗ Resume');
@@ -166,8 +178,7 @@ function render() {
       if (busy) return;
       busy = true;
       try {
-        const urls = task.tabs.map(t => t.url).filter(validUrl);
-        const result = await resumeUrls(task.tabs);
+        const result = await resumeUrls(task.tabs, chrome, task.preferredUrl);
         state = activateTask(state, task.id);
         await writeState(state);
         render(); renderSuggestions(); await refreshPresence(); flash(`Reused ${result.existing}, opened ${result.opened} tabs`);

@@ -1,4 +1,4 @@
-# THREAD — Chrome task-memory extension (v0.4)
+# THREAD — Chrome task-memory extension (v0.4.1)
 
 Local-first Manifest V3 Chrome extension. No backend, subscription, account, or AI key.
 
@@ -40,3 +40,12 @@ Check manual save → checkpoint → pause → resume and verify no duplicate ta
 - Updates retain the original `threadStateV1` workspaces, `threadHistoryV2` snapshots and tracking settings.
 
 Test cases: task complete → hidden from paused suggestions → reopen → paused; browser tab presence changes; snapshot clustering; excluded domains; recent history deletion.
+
+
+## v0.4.1 focused-tab restoration
+
+Click a saved tab's title to activate **that specific tab** in Chrome (or open only that URL if absent). THREAD remembers the selected URL as the workspace's preferred tab. Next time you click Resume, it restores missing URLs and focuses the preferred tab rather than the first tab.
+
+When a workspace is captured or updated, the active tab is marked and becomes its preferred URL. Legacy workspaces still work; click the tab you want once to assign the correct focus. No saved workspaces are removed, and there are no new Chrome permissions.
+
+Checks: tab click focuses correct existing tab; absent URL opens only selected tab; Resume focuses preferred tab even when another saved tab is first; no duplicate URLs created.
