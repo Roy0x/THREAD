@@ -1,8 +1,11 @@
 import { readState, writeState, createTask, dedupeTabs, updateTask, activateTask } from './store.js';
+import { resumeUrls } from './resume.js';
 
 const $ = id => document.getElementById(id);
 let state = await readState();
 let busy = false;
+let history = [];
+let settings = { tracking: false, excludedDomains: [] };
 const validUrl = url => /^https?:\/\//i.test(url || '');
 
 function flash(message) {
@@ -28,6 +31,33 @@ function el(tag, className, content) {
   if (className) node.className = className;
   if (content !== undefined) node.textContent = content;
   return node;
+}
+function renderHistory() {
+  $('history').replaceChildren();
+  if (!history.length) $('history').append(el('div', 'history-empty', 'No recent sessions recorded yet.'));
+  for (const entry of history.slice(0, 8)) {
+    const card = el('div', 'history-entry');
+    card.append(el('div', 'history-title', `${entry.tabs.length} tabs · ${new Date(entry.timestamp).toLocaleString()}`));
+    card.append(el('div', 'meta', entry.tabs.slice(0, 3).map(t => t.title).join(' · ')));
+    const actions = el('div', 'history-actions');
+    const recover = el('button', '', 'Recover tabs');
+    recover.addEventListener('click', async () => {
+      try {
+        const result = await resumeUrls(entry.tabs);
+        flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
+      } catch (e) { flash(`Error: ${e.message}`); }
+    });
+    const save = el('button', '', 'Save as task');
+    save.addEventListener('click', async () => {
+      const name = prompt('Name this workspace:', entry.tabs[0]?.title || 'Recovered workspace');
+      if (!name?.trim()) return;
+      await mutate(s => createTask(s, name, entry.tabs));
+      flash('Recovered workspace saved');
+    });
+    actions.append(recover, save);
+    card.append(actions);
+    $('history').append(card);
+  }
 }
 function render() {
   $('tasks').replaceChildren();
@@ -68,10 +98,10 @@ function render() {
       busy = true;
       try {
         const urls = task.tabs.map(t => t.url).filter(validUrl);
-        if (urls.length) await chrome.windows.create({ url: urls, focused: true });
+        const result = await resumeUrls(task.tabs);
         state = activateTask(state, task.id);
         await writeState(state);
-        render(); flash(urls.length ? `Opened ${urls.length} tabs in new window` : 'Task activated (no web tabs saved)');
+        render(); flash(`Reused ${result.existing}, opened ${result.opened} tabs`);
       } catch (e) { flash(`Error: ${e.message}`); }
       finally { busy = false; }
     });
@@ -106,9 +136,45 @@ $('create').addEventListener('click', async () => {
   } catch (e) { flash(`Error: ${e.message}`); }
 });
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.threadHistoryV2) {
+    history = changes.threadHistoryV2.newValue || [];
+    renderHistory();
+  }
   if (area === 'local' && changes.threadStateV1 && !busy) {
     state = changes.threadStateV1.newValue || { tasks: [], activeId: null };
     render();
   }
 });
+$('trackingEnabled').addEventListener('change', async () => {
+  settings.tracking = $('trackingEnabled').checked;
+  await chrome.storage.local.set({ threadSettingsV2: settings });
+  if (settings.tracking) {
+    const windows = await chrome.windows.getAll({ windowTypes: ['normal'] });
+    const focused = windows.find(w => w.focused) || windows[0];
+    if (focused) await chrome.runtime.sendMessage({ type: 'CAPTURE_WINDOW', windowId: focused.id });
+  }
+  flash(settings.tracking ? 'Recent work tracking enabled' : 'Tracking disabled');
+});
+$('savePrivacy').addEventListener('click', async () => {
+  const raw = $('excluded').value.split(/[,\n]/).map(d => d.trim().toLowerCase()).filter(Boolean);
+  const domains = raw.map(d => d.replace(/^https?:\/\//, '').replace(/\/.*$/, ''));
+  if (domains.some(d => !/^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(d))) return flash('Use domain names, one per line');
+  settings.excludedDomains = [...new Set(domains)];
+  await chrome.storage.local.set({ threadSettingsV2: settings });
+  history = [];
+  await chrome.storage.local.set({ threadHistoryV2: [] });
+  renderHistory(); flash('Exclusions saved and prior history cleared');
+});
+$('clearHistory').addEventListener('click', async () => {
+  if (!confirm('Delete all recent-session history? Saved workspaces will remain.')) return;
+  history = [];
+  await chrome.storage.local.set({ threadHistoryV2: [] });
+  renderHistory(); flash('Recent history cleared');
+});
+const extras = await chrome.storage.local.get(['threadHistoryV2', 'threadSettingsV2']);
+history = extras.threadHistoryV2 || [];
+settings = extras.threadSettingsV2 || settings;
+$('trackingEnabled').checked = settings.tracking;
+$('excluded').value = settings.excludedDomains.join('\n');
+renderHistory();
 render();

@@ -1,4 +1,4 @@
-# THREAD — Browser Task Memory (MVP 0.1)
+# THREAD — Browser Task Memory (MVP 0.2)
 
 Local-first Chrome extension for saving, pausing, and resuming browser workspaces.
 
@@ -51,3 +51,9 @@ Manifest V3, plain JavaScript, zero dependencies, no backend, no API key.
 ## Known engineering limits
 
 Storage writes are last-writer-wins across simultaneous side panels. A future version should serialize updates if multi-panel editing becomes common. Capturing the focused window may not represent all tabs from a multi-window project. Browser permission prompts may vary by Chrome version.
+
+## v0.2
+
+Enable Recent work recovery in THREAD's side panel to record up to 30 local URL/title snapshots. Use Recover tabs to reuse already-open URLs and reopen missing tabs, or Save as task to create a workspace. Domain exclusions clear old history. Tracking is off by default and never reads page contents or incognito tabs. No automatic task inference is claimed.
+
+To update an unpacked extension, run `git pull origin main`, then select Reload at `chrome://extensions`.

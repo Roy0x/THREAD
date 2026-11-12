@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>THREAD</title>
   <link rel="stylesheet" href="panel.css" />
+  <link rel="stylesheet" href="tracking.css" />
 </head>
 <body>
   <header class="header">
@@ -17,6 +18,13 @@
       <input id="taskName" maxlength="80" placeholder="e.g. Fix authentication bug" autocomplete="off" />
       <button id="create">+ Save current window as task</button>
       <p class="hint">Captures the titles and URLs of normal web tabs in this window.</p>
+    </section>
+    <section class="tracking">
+      <div class="tracking-top"><div><strong>Recent work recovery</strong><p>Optionally remember recently used web tabs.</p></div><label class="switch"><input id="trackingEnabled" type="checkbox" /><span>On</span></label></div>
+      <div class="privacy"><label for="excluded">EXCLUDED DOMAINS (ONE PER LINE)</label><textarea id="excluded" rows="2" placeholder="bank.example.com"></textarea><button id="savePrivacy" class="minor">Save exclusions</button></div>
+      <div class="section-head"><h2>Recent sessions</h2><button id="clearHistory" class="text-button">Clear history</button></div>
+      <div id="history" class="history"></div>
+      <p class="hint">Tracking is off until enabled. Saves URLs and titles only, up to 30 snapshots. No page content or incognito tabs.</p>
     </section>
     <div class="section-head"><h2>Workspaces</h2><span id="count">0 saved</span></div>
     <div id="tasks" class="tasks"></div>
