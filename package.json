@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:proof": "node --test tests/resume.proof.test.mjs"
+  }
+}
