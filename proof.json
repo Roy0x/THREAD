@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "checks": [
+    {
+      "id": "resume_source_present",
+      "type": "file_exists",
+      "path": "resume.js"
+    },
+    {
+      "id": "panel_source_present",
+      "type": "file_exists",
+      "path": "panel.js"
+    },
+    {
+      "id": "tab_resume_acceptance",
+      "type": "command",
+      "argv": [
+        "node",
+        "--test",
+        "tests/resume.proof.test.mjs"
+      ],
+      "timeout_seconds": 30
+    }
+  ]
+}
